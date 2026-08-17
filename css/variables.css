@@ -1,0 +1,149 @@
+/* ═══════════════════════════════════════════════════════════
+   Design Tokens — مصدر واحد لكل لون ومقاس في النظام
+   لا يوجد أي لون مكتوب مباشرة داخل بقية الملفات.
+   الوضع الافتراضي فاتح. الوضع الداكن يعيد تعريف الرموز فقط.
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── الأساس: رمادي هادئ مائل للدفء */
+  --c-bg:              #f7f8fa;
+  --c-surface:         #ffffff;
+  --c-surface-2:       #f2f4f7;
+  --c-surface-hover:   #eceff3;
+  --c-border:          #e3e7ed;
+  --c-border-strong:   #cbd2dc;
+
+  --c-text:            #1b222c;
+  --c-text-2:          #59616e;
+  --c-text-3:          #868e9b;
+  --c-text-inverse:    #ffffff;
+
+  /* ── اللون الرئيسي: أزرق مخضرّ هادئ */
+  --c-primary:         #2f6f6b;
+  --c-primary-hover:   #275c59;
+  --c-primary-soft:    #e6f0ef;
+  --c-primary-text:    #235754;
+
+  /* ── ألوان الحالة (هادئة، غير صارخة) */
+  --c-active:          #2e7d5b;
+  --c-active-soft:     #e6f3ec;
+  --c-idle:            #a97a1f;
+  --c-idle-soft:       #fbf1de;
+  --c-break:           #4a63a8;
+  --c-break-soft:      #e9edf8;
+  --c-offline:         #737b88;
+  --c-offline-soft:    #eef0f3;
+  --c-danger:          #b3453c;
+  --c-danger-hover:    #9a3730;
+  --c-danger-soft:     #fbeceb;
+  --c-warning:         #a4661c;
+  --c-warning-soft:    #fbf0e3;
+  --c-success:         #2e7d5b;
+  --c-success-soft:    #e6f3ec;
+
+  /* ── الظلال */
+  --shadow-sm:  0 1px 2px rgba(16, 24, 40, .05);
+  --shadow-md:  0 2px 8px rgba(16, 24, 40, .07);
+  --shadow-lg:  0 8px 24px rgba(16, 24, 40, .10);
+
+  /* ── المقاسات */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-full: 999px;
+
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
+
+  --fs-xs: 12px; --fs-sm: 13px; --fs-md: 14px;
+  --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 26px; --fs-3xl: 34px;
+
+  --font: "Segoe UI", "Noto Sans Arabic", "Dubai", Tahoma, "Helvetica Neue", Arial, sans-serif;
+  --font-num: "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
+
+  --nav-w: 236px;
+  --header-h: 60px;
+  --transition: 140ms ease;
+}
+
+/* ── الوضع الداكن: يُطبَّق بتفضيل النظام ما لم يختر المستخدم الفاتح صراحةً */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --c-bg:            #14181e;
+    --c-surface:       #1b2027;
+    --c-surface-2:     #222831;
+    --c-surface-hover: #2a313b;
+    --c-border:        #2c333d;
+    --c-border-strong: #3d4653;
+
+    --c-text:          #e7eaef;
+    --c-text-2:        #a4adba;
+    --c-text-3:        #78818f;
+    --c-text-inverse:  #14181e;
+
+    --c-primary:       #4d9d97;
+    --c-primary-hover: #5fb0aa;
+    --c-primary-soft:  #1e2e2d;
+    --c-primary-text:  #7cc4be;
+
+    --c-active:        #4fa87c;
+    --c-active-soft:   #1a2b23;
+    --c-idle:          #cb9c45;
+    --c-idle-soft:     #2c2519;
+    --c-break:         #7a91d4;
+    --c-break-soft:    #1e2333;
+    --c-offline:       #8b93a0;
+    --c-offline-soft:  #232830;
+    --c-danger:        #d9736a;
+    --c-danger-hover:  #e2857d;
+    --c-danger-soft:   #2e1f1e;
+    --c-warning:       #cf9350;
+    --c-warning-soft:  #2c2418;
+    --c-success:       #4fa87c;
+    --c-success-soft:  #1a2b23;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, .35);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, .45);
+  }
+}
+
+/* ── الاختيار الصريح للوضع الداكن يتفوّق على تفضيل النظام */
+:root[data-theme="dark"] {
+  --c-bg:            #14181e;
+  --c-surface:       #1b2027;
+  --c-surface-2:     #222831;
+  --c-surface-hover: #2a313b;
+  --c-border:        #2c333d;
+  --c-border-strong: #3d4653;
+
+  --c-text:          #e7eaef;
+  --c-text-2:        #a4adba;
+  --c-text-3:        #78818f;
+  --c-text-inverse:  #14181e;
+
+  --c-primary:       #4d9d97;
+  --c-primary-hover: #5fb0aa;
+  --c-primary-soft:  #1e2e2d;
+  --c-primary-text:  #7cc4be;
+
+  --c-active:        #4fa87c;
+  --c-active-soft:   #1a2b23;
+  --c-idle:          #cb9c45;
+  --c-idle-soft:     #2c2519;
+  --c-break:         #7a91d4;
+  --c-break-soft:    #1e2333;
+  --c-offline:       #8b93a0;
+  --c-offline-soft:  #232830;
+  --c-danger:        #d9736a;
+  --c-danger-hover:  #e2857d;
+  --c-danger-soft:   #2e1f1e;
+  --c-warning:       #cf9350;
+  --c-warning-soft:  #2c2418;
+  --c-success:       #4fa87c;
+  --c-success-soft:  #1a2b23;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, .35);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, .45);
+}

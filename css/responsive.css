@@ -1,0 +1,45 @@
+/* الاستجابة للشاشات */
+
+@media (max-width: 1080px) {
+  .shift-panel { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 860px) {
+  .menu-toggle { display: grid; }
+
+  .sidebar {
+    position: fixed; inset-inline-start: 0; top: 0; z-index: 60;
+    transform: translateX(100%);
+    transition: transform 180ms ease;
+    box-shadow: var(--shadow-lg);
+  }
+  :root[dir="rtl"] .sidebar, body .sidebar { transform: translateX(100%); }
+  .sidebar.open { transform: translateX(0); }
+
+  .nav-scrim {
+    position: fixed; inset: 0; background: rgba(12,16,22,.45); z-index: 50;
+  }
+
+  .content { padding: var(--sp-4); }
+  .topbar { padding: 0 var(--sp-4); }
+  .stat-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .stat-value { font-size: var(--fs-xl); }
+}
+
+@media (max-width: 560px) {
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .clock { font-size: var(--fs-2xl); }
+  .shift-status { padding: var(--sp-5); }
+  .filters { padding: var(--sp-3); }
+  .modal-foot { flex-direction: column-reverse; }
+  .modal-foot .btn { width: 100%; }
+  table.data th, table.data td { padding: var(--sp-2) var(--sp-3); }
+  #toasts { left: var(--sp-3); right: var(--sp-3); bottom: var(--sp-3); max-width: none; }
+}
+
+@media print {
+  .sidebar, .topbar, .filters, .btn, #toasts { display: none !important; }
+  .content { padding: 0; }
+  .card { box-shadow: none; border-color: #ccc; }
+  body { background: #fff; }
+}
