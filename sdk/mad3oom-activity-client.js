@@ -23,7 +23,13 @@
  *   • نوع العملية (من كتالوج معرَّف في قاعدة البيانات)
  *   • معرّف الكيان (رقم التذكرة مثلًا)
  *   • عدّاد رقمي لعدد التفاعلات منذ آخر نبضة
- *   • هل التبويب ظاهر، وعدد التبويبات المفتوحة
+ *   • هل تبويب مدعوم ظاهر، وهل عليه Focus، وعدد التبويبات المفتوحة
+ *
+ * ── متى يُحتسب Active Time ───────────────────────────────────
+ *   فقط بينما يكون على الجهاز تبويب مدعوم واحد على الأقل: ظاهرًا
+ *   (visibilityState) وعليه Focus (focus/blur)، مع تفاعل حقيقي داخل
+ *   نافذة الخمول. الانتقال إلى تبويب أو تطبيق آخر يوقف الاحتساب فورًا
+ *   بينما يستمر الشيفت كما هو — الفصل بين الاثنين مقصود.
  *
  * ── ما لا يُرسَل إطلاقًا ─────────────────────────────────────
  *   • أي حرف يكتبه الموظف (المفاتيح تُعدّ عدًّا ولا تُقرأ)
@@ -67,6 +73,14 @@ class Client {
     this.interactions = 0;
     this.queue = [];
     this.tabs = new Map([[this.tabId, Date.now()]]);
+
+    // حالة الانخراط: تبويب ظاهر + عليه Focus.
+    // visibilityState يكشف الانتقال إلى تبويب آخر داخل النافذة نفسها،
+    // و focus/blur يكشفان انتقال المستخدم إلى نافذة أو تطبيق آخر بينما
+    // يبقى تبويب مدعوم "ظاهرًا" تقنيًا. الحالتان مطلوبتان معًا.
+    this.visible = document.visibilityState === 'visible';
+    this.focused = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
+    this.peers = new Map();   // tabId -> { v: ظاهر, e: منخرط } لبقية تبويبات الجهاز
     this.intervalSec = 60;
     this.failures = 0;
     this.isLeader = false;
@@ -149,12 +163,46 @@ class Client {
 
   _listenLifecycle() {
     this._on(document, 'visibilitychange', () => {
-      if (document.visibilityState === 'visible') { this.bump(); this._schedule(1); }
+      this.visible = document.visibilityState === 'visible';
+      if (this.visible && typeof document.hasFocus === 'function') this.focused = document.hasFocus();
+      this._syncEngagement();
     });
+    this._on(window, 'focus', () => { this.focused = true;  this._syncEngagement(); });
+    this._on(window, 'blur',  () => { this.focused = false; this._syncEngagement(); });
+
     this._on(window, 'online', () => this._schedule(1));
     this._on(window, 'pagehide', () => {
-      if (this._bc) this._bc.postMessage({ t: 'bye', tab: this.tabId });
+      this.visible = false; this.focused = false;
+      if (this._bc) {
+        this._bc.postMessage({ t: 'engage', tab: this.tabId, v: false, e: false });
+        this._bc.postMessage({ t: 'bye', tab: this.tabId });
+      }
     });
+  }
+
+  /** انخراط هذا التبويب. */
+  get engaged() { return this.visible && this.focused; }
+
+  /** انخراط الجهاز كله: يكفي تبويب مدعوم واحد منخرط. */
+  _deviceEngagement() {
+    let v = this.visible, e = this.engaged;
+    for (const st of this.peers.values()) { v = v || !!st.v; e = e || !!st.e; }
+    return { visible: v, engaged: e };
+  }
+
+  /**
+   * تغيّر الانخراط: يُبلَّغ فورًا لا في النبضة التالية.
+   * الدخول  ⇒ نبضة فورية حتى يستأنف الاحتساب من هذه اللحظة.
+   * الخروج  ⇒ نبضة فورية حتى يتوقف الاحتساب عند هذه اللحظة بالضبط،
+   *           فيغلق الخادم نافذة النشاط ولا يمنح فترة الغياب عند العودة.
+   */
+  _syncEngagement() {
+    const now = this.engaged;
+    if (now === this._lastEngaged) return;
+    this._lastEngaged = now;
+    if (this._bc) this._bc.postMessage({ t: 'engage', tab: this.tabId, v: this.visible, e: now });
+    if (now) this.bump();
+    this._schedule(1);
   }
 
   _openChannel() {
@@ -164,14 +212,21 @@ class Client {
       const m = ev.data || {};
       if (m.tab && m.tab !== this.tabId) this.tabs.set(m.tab, Date.now());
       if (m.t === 'delta' && this.isLeader) this.interactions += m.n || 0;
-      if (m.t === 'bye') this.tabs.delete(m.tab);
+      if (m.t === 'engage' && m.tab !== this.tabId) {
+        this.peers.set(m.tab, { v: !!m.v, e: !!m.e });
+        if (this.isLeader) this._schedule(1);   // تغيّر انخراط الجهاز ⇒ أبلغ فورًا
+      }
+      if (m.t === 'bye') { this.tabs.delete(m.tab); this.peers.delete(m.tab); }
       if (m.t === 'status') { this.hasSession = m.payload?.status === 'ok'; this.onStatus?.(m.payload); }
     };
     const ping = setInterval(() => {
       if (!this.running || !this._bc) { clearInterval(ping); return; }
       this._bc.postMessage({ t: 'ping', tab: this.tabId });
+      this._bc.postMessage({ t: 'engage', tab: this.tabId, v: this.visible, e: this.engaged });
       const cutoff = Date.now() - 15000;
-      for (const [id, seen] of this.tabs) if (id !== this.tabId && seen < cutoff) this.tabs.delete(id);
+      for (const [id, seen] of this.tabs) {
+        if (id !== this.tabId && seen < cutoff) { this.tabs.delete(id); this.peers.delete(id); }
+      }
     }, 5000);
   }
 
@@ -199,8 +254,9 @@ class Client {
 
     const events = this.queue;
     const count = this.interactions;
-    // لا ترسل نبضة فارغة تمامًا إذا كان التبويب مخفيًا ولا يوجد أي نشاط
-    if (!events.length && count === 0 && document.visibilityState !== 'visible' && this.hasSession === false) {
+    const dev = this._deviceEngagement();
+    // لا ترسل نبضة فارغة تمامًا إذا كان الجهاز غير منخرط ولا يوجد شيفت
+    if (!events.length && count === 0 && !dev.visible && this.hasSession === false) {
       this._schedule(this.intervalSec);
       return;
     }
@@ -211,7 +267,10 @@ class Client {
       device_id: this.device,
       source_app: SOURCE_APP,
       interactions: count,
-      visible: document.visibilityState === 'visible',
+      // الحالة على مستوى الجهاز: يكفي تبويب مدعوم واحد منخرط، حتى لو كان
+      // التبويب القائد مخفيًا. الخادم يشترط visible && focused معًا.
+      visible: dev.visible,
+      focused: dev.engaged,
       tabs: Math.max(1, this.tabs.size),
       client_time: new Date().toISOString(),
       user_agent: navigator.userAgent,

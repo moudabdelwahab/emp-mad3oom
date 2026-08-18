@@ -13,6 +13,11 @@
  *   • إحداثيات الفأرة، لقطات الشاشة، عناوين المواقع الأخرى، أي نشاط خارج
  *     هذه الصفحات.
  *
+ * ملاحظة مهمة: لوحة العمليات ليست ضمن التطبيقات المؤهَّلة لاحتساب Active Time
+ * (الإعداد activity_source_apps). نبضاتها تُبقي حالة الاتصال معروفة وتمنع
+ * الإغلاق التلقائي، لكنها لا تمنح ثانية واحدة من وقت النشاط — وقت النشاط
+ * يأتي من تبويب منصة مدعوم وحده.
+ *
  * تعدد التبويبات:
  *   يُنتخب تبويب واحد "قائدًا" عبر Web Locks، وهو وحده من يرسل النبضات.
  *   بقية التبويبات ترسل عدّاداتها إليه عبر BroadcastChannel. النتيجة: طلب
@@ -45,6 +50,8 @@ export class ActivityTracker {
     this.interactions = 0;
     this.queue = [];                 // أحداث لم تُرسل بعد
     this.tabs = new Map([[this.tabId, Date.now()]]);
+    this.visible = document.visibilityState === 'visible';
+    this.focused = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
     this.isLeader = false;
     this.running = false;
     this.failures = 0;
@@ -120,8 +127,13 @@ export class ActivityTracker {
     }, { passive: true });
 
     this._on(document, 'visibilitychange', () => {
-      if (document.visibilityState === 'visible') { this.bump(); this._schedule(1); }
+      this.visible = document.visibilityState === 'visible';
+      if (this.visible && typeof document.hasFocus === 'function') this.focused = document.hasFocus();
+      if (this.visible) this.bump();
+      this._schedule(1);
     });
+    this._on(window, 'focus', () => { this.focused = true;  this._schedule(1); });
+    this._on(window, 'blur',  () => { this.focused = false; this._schedule(1); });
 
     this._on(window, 'online',  () => { this._schedule(1); });
     this._on(window, 'offline', () => { this.onStatus({ status: 'offline_client' }); });
@@ -198,7 +210,8 @@ export class ActivityTracker {
       device_id: this.device,
       source_app: this.sourceApp,
       interactions: count,
-      visible: document.visibilityState === 'visible',
+      visible: this.visible,
+      focused: this.visible && this.focused,
       tabs: Math.max(1, this.tabs.size),
       client_time: new Date().toISOString(),
       user_agent: navigator.userAgent,
