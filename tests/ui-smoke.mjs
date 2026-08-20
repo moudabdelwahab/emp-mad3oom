@@ -38,8 +38,11 @@ const ME = {
 
 const RESPONSES = {
   eo_me: ME,
-  eo_ingest_activity: { status: 'ok', server_time: now.toISOString(), presence: 'active', presence_label: 'نشط',
-                        credited_seconds: 60, stored_events: 0, on_break: false, totals: ME.totals, next_heartbeat_seconds: 60 },
+  // نبضة لم تُحتسب: تبويب مدعوم غير مفتوح ⇒ يجب أن تظهر رسالة توضيحية للموظف
+  eo_ingest_activity: { status: 'ok', server_time: now.toISOString(), presence: 'idle', presence_label: 'خامل',
+                        credited_seconds: 0, stored_events: 0, on_break: false, totals: ME.totals,
+                        qualifies: false, engaged: false, activity_counted: false,
+                        activity_reason: 'not_qualified_app', next_heartbeat_seconds: 60 },
   eo_my_timeline: [
     { at: iso(200), until: null, kind: 'shift_start', label: 'بدأ العمل', seconds: null, meta: {} },
     { at: iso(198), until: iso(150), kind: 'active_period', label: 'فترة نشاط', seconds: 2880, meta: {} },
@@ -167,9 +170,17 @@ for (const [path, label] of pages) {
         .map((n) => n.textContent).join(' ').replace(/EMP-\d+|mad3oom|CSV|IP/gi, ''))
   }));
 
-  const ok = real.length === 0 && rendered.sidebar && rendered.cards > 0 && rendered.text > 200 && !rendered.latin;
+  // لوحة الموظف: يجب أن تشرح سبب توقّف احتساب وقت النشاط.
+  // الرسالة تظهر بعد أول نبضة (بعد ثانيتين من التحميل)، لذا ننتظرها.
+  const hintOk = path !== 'dashboard.html' || await page
+    .waitForFunction(() => document.body.innerText.includes('وقت النشاط يُحتسب داخل منصة مدعوم فقط'),
+                     null, { timeout: 6000 })
+    .then(() => true).catch(() => false);
+
+  const ok = real.length === 0 && rendered.sidebar && rendered.cards > 0 && rendered.text > 200
+             && !rendered.latin && hintOk;
   ok ? pass++ : fail++;
-  console.log(`${ok ? '[نجح]' : '[فشل]'} ${label} (${path}) — بطاقات: ${rendered.cards}${real.length ? ' — أخطاء: ' + real.join(' | ') : ''}${rendered.latin ? ' — نص إنجليزي في الواجهة' : ''}`);
+  console.log(`${ok ? '[نجح]' : '[فشل]'} ${label} (${path}) — بطاقات: ${rendered.cards}${real.length ? ' — أخطاء: ' + real.join(' | ') : ''}${rendered.latin ? ' — نص إنجليزي في الواجهة' : ''}${hintOk ? '' : ' — رسالة سبب عدم الاحتساب لم تظهر'}`);
 
   if (process.env.EO_SHOTS) await page.screenshot({ path: `${process.env.EO_SHOTS}/${path.split('?')[0].replace('.html', '')}.png`, fullPage: true });
   await ctx.close();

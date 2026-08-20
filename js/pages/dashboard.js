@@ -20,13 +20,14 @@ if (auth) {
   });
 
   const statsBox    = el('div', { class: 'stat-grid' });
+  const hintBox     = el('div');
   const timelineBox = el('div');
   const activityBox = el('div');
 
   const panel = createShiftPanel({ onChange: (status) => { paint(status); refreshDetails(); } });
 
   mount(content,
-    el('div', { class: 'shift-panel' }, [panel.root, el('div', {}, [statsBox])]),
+    el('div', { class: 'shift-panel' }, [panel.root, el('div', {}, [hintBox, statsBox])]),
     card('الخط الزمني لليوم', timelineBox, [
       el('button', { class: 'icon-btn', title: 'تحديث', html: icon('refresh'), onclick: () => refreshDetails() })
     ]),
@@ -44,6 +45,7 @@ if (auth) {
       if (res.status === 'ok') {
         setConnection(true, `آخر مزامنة ${time(res.server_time)}`);
         paintTotals(res.totals, res.presence);
+        paintActivityHint(res);
       } else if (res.status === 'offline_client') {
         setConnection(false, 'لا يوجد اتصال — سيُستأنف تلقائيًا');
       } else if (res.status === 'retrying') {
@@ -68,6 +70,29 @@ if (auth) {
 
   function paint(status) {
     paintTotals(status.totals, status.presence);
+  }
+
+  /**
+   * لماذا لا يزيد وقت النشاط الآن؟
+   * وقت الشيفت يستمر من بدء العمل إلى إنهائه، أما وقت النشاط فيُحتسب فقط
+   * أثناء العمل داخل تبويب منصة مدعوم. هذه الرسالة تشرح الفرق للموظف بدل
+   * أن يظنّ أن هناك خللًا.
+   */
+  const HINTS = {
+    not_qualified_app: 'وقت الشيفت يسير، لكن وقت النشاط يُحتسب داخل منصة مدعوم فقط — افتح تبويب مدعوم وابدأ العمل.',
+    tab_hidden:        'تبويب مدعوم مخفي الآن، فتوقّف احتساب وقت النشاط. الشيفت مستمر كما هو.',
+    tab_unfocused:     'تبويب مدعوم ليس التبويب النشط الآن، فتوقّف احتساب وقت النشاط. الشيفت مستمر كما هو.',
+    on_break:          'أنت في استراحة — لا يُحتسب وقت نشاط، والاستراحة مطروحة من مقام النسبة.',
+    no_interaction:    'لا يوجد تفاعل داخل مدعوم منذ فترة، فتوقّف احتساب وقت النشاط. أي تفاعل حقيقي يستأنفه.'
+  };
+
+  function paintActivityHint(res) {
+    const text = res.activity_counted ? null : HINTS[res.activity_reason];
+    if (!text) { mount(hintBox); return; }
+    mount(hintBox, el('div', { class: 'alert alert-info mb-4' }, [
+      el('span', { html: icon('info') }),
+      el('div', { class: 'small', text })
+    ]));
   }
 
   function paintTotals(t, presence) {
