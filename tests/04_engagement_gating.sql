@@ -45,7 +45,7 @@ begin
     select coalesce(sum(seconds),0) into secs from emp_ops.activity_minutes where employee_id = e1;
     if secs = 0 and js ->> 'activity_reason' = 'not_qualified_app' and (js ->> 'qualifies')::boolean = false
     then p:=p+1; r:=concat(r, E'\n[نجح] ب1 شيفت مفتوح + لوحة العمليات فقط ⇒ وقت نشاط = 0');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب1 نشاط=', secs, ' سبب=', coalesce(js->>'activity_reason','?'); end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب1 نشاط=', secs, ' سبب=', coalesce(js->>'activity_reason','?')); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب1: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -60,7 +60,7 @@ begin
     secs := (js ->> 'credited_seconds')::int;
     if secs between 110 and 130 and (js ->> 'engaged')::boolean and js ->> 'activity_reason' = 'counted'
     then p:=p+1; r:=concat(r, E'\n[نجح] ب2 العمل داخل مدعوم احتُسب (', secs, 'ث)');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب2 احتُسب ', secs, ' سبب=', coalesce(js->>'activity_reason','?'); end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب2 احتُسب ', secs, ' سبب=', coalesce(js->>'activity_reason','?')); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب2: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -70,7 +70,7 @@ begin
     select marked_until into mu from emp_ops.employee_runtime_state where employee_id = e1;
     if js ->> 'activity_reason' = 'tab_hidden' and (js ->> 'engaged')::boolean = false and mu > now()
     then p:=p+1; r:=concat(r, E'\n[نجح] ب3 تبويب مخفي ⇒ توقّف الاحتساب وأُغلقت النافذة');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب3 سبب=', coalesce(js->>'activity_reason','?'), ' نافذة مغلقة=', (mu > now())::text; end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب3 سبب=', coalesce(js->>'activity_reason','?'), ' نافذة مغلقة=', (mu > now())::text); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب3: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -81,7 +81,7 @@ begin
     select coalesce(sum(seconds),0) into secs from emp_ops.activity_minutes where employee_id = e1;
     if (js ->> 'credited_seconds')::int = 0 and secs = n
     then p:=p+1; r:=concat(r, E'\n[نجح] ب4 العودة وحدها لا تمنح وقتًا (يلزم تفاعل)');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب4 مُنح ', ((js->>'credited_seconds')::int), 'ث'; end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب4 مُنح ', ((js->>'credited_seconds')::int), 'ث'); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب4: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -97,7 +97,7 @@ begin
     secs := (js ->> 'credited_seconds')::int;
     if mu <= now() and secs between 50 and 70
     then p:=p+1; r:=concat(r, E'\n[نجح] ب4/ب التفاعل بعد العودة استأنف الاحتساب (', secs, 'ث)');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب4/ب استئناف=', secs, 'ث'; end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب4/ب استئناف=', secs, 'ث'); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب4/ب: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -132,7 +132,7 @@ begin
     secs := (js ->> 'credited_seconds')::int;
     if secs between 10 and 30 and js ->> 'presence' = 'idle'
     then p:=p+1; r:=concat(r, E'\n[نجح] ب6 الخمول أوقف الاحتساب عند العتبة (', secs, 'ث من 120) والحالة خامل');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب6 احتُسب ', secs, ' الحالة=', coalesce(js->>'presence','?'); end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب6 احتُسب ', secs, ' الحالة=', coalesce(js->>'presence','?')); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب6: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -145,7 +145,7 @@ begin
     js := public.eo_ingest_activity('{"device_id":"pc","source_app":"mad3oom","interactions":6,"visible":true,"focused":true}'::jsonb);
     if (js ->> 'credited_seconds')::int = 0
     then p:=p+1; r:=concat(r, E'\n[نجح] ب7 العودة بعد 40 دقيقة لم تمنح أي وقت رجعي');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب7 مُنح ', (js->>'credited_seconds'), 'ث رجعيًا!'; end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب7 مُنح ', (js->>'credited_seconds'), 'ث رجعيًا!'); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب7: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -158,7 +158,7 @@ begin
     js := public.eo_ingest_activity('{"device_id":"pc","source_app":"mad3oom","interactions":10,"visible":true,"focused":true}'::jsonb);
     if (js ->> 'credited_seconds')::int = 0 and (js ->> 'on_break')::boolean and js ->> 'activity_reason' = 'on_break'
     then p:=p+1; r:=concat(r, E'\n[نجح] ب8 الاستراحة لا تُحتسب نشاطًا');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب8 مُنح ', (js->>'credited_seconds'), ' سبب=', coalesce(js->>'activity_reason','?'); end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب8 مُنح ', (js->>'credited_seconds'), ' سبب=', coalesce(js->>'activity_reason','?')); end if;
     perform public.eo_end_break();
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب8: '||sqlerrm; end;
 
@@ -169,7 +169,7 @@ begin
     js := public.eo_ingest_activity('{"device_id":"pc","source_app":"mad3oom","interactions":0,"visible":true,"focused":true}'::jsonb);
     if (js ->> 'credited_seconds')::int = 0
     then p:=p+1; r:=concat(r, E'\n[نجح] ب8/ب إنهاء الاستراحة لا يمنح نشاطًا بلا تفاعل داخل مدعوم');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب8/ب مُنح ', (js->>'credited_seconds'), 'ث'; end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب8/ب مُنح ', (js->>'credited_seconds'), 'ث'); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب8/ب: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -183,7 +183,7 @@ begin
     js := public.eo_ingest_activity('{"device_id":"pc","source_app":"mad3oom","interactions":2,"visible":true,"focused":true,"tabs":3}'::jsonb);
     if secs between 80 and 100 and (js ->> 'credited_seconds')::int = 0
     then p:=p+1; r:=concat(r, E'\n[نجح] ب10 ثلاثة تبويبات على جهاز واحد ⇒ احتساب مرة واحدة (', secs, 'ث)');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب10 الأول=', secs, ' الثاني=', (js->>'credited_seconds'); end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب10 الأول=', secs, ' الثاني=', (js->>'credited_seconds')); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب10: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -197,7 +197,7 @@ begin
     js := public.eo_ingest_activity('{"device_id":"phone","source_app":"mad3oom","interactions":2,"visible":true,"focused":true}'::jsonb);
     if secs between 80 and 100 and (js ->> 'credited_seconds')::int = 0
     then p:=p+1; r:=concat(r, E'\n[نجح] ب11 جهازان ⇒ احتساب مرة واحدة (', secs, 'ث)');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب11 الأول=', secs, ' الثاني=', (js->>'credited_seconds'); end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب11 الأول=', secs, ' الثاني=', (js->>'credited_seconds')); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب11: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -213,7 +213,7 @@ begin
     select coalesce(sum(seconds),0) into secs from emp_ops.activity_minutes where employee_id = e1;
     if (js ->> 'credited_seconds')::int = 0 and secs = n
     then p:=p+1; r:=concat(r, E'\n[نجح] ب12 إعادة فتح التبويب بعد ساعة لم تمنح شيئًا');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب12 مُنح ', ((js->>'credited_seconds')::int), 'ث'; end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب12 مُنح ', ((js->>'credited_seconds')::int), 'ث'); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب12: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -223,7 +223,7 @@ begin
     js := public.eo_ingest_activity('{"device_id":"pc","source_app":"mad3oom","interactions":20,"visible":true,"focused":true}'::jsonb);
     if js ->> 'status' = 'no_session'
     then p:=p+1; r:=concat(r, E'\n[نجح] ب9 بعد إنهاء الشيفت لا يُقبل أي نشاط');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب9 الحالة=', coalesce(js->>'status','?'); end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب9 الحالة=', coalesce(js->>'status','?')); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب9: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -234,7 +234,7 @@ begin
     select coalesce(sum(seconds),0) into secs from emp_ops.activity_minutes where employee_id = e1;
     if n >= 0 and secs > 0 and secs < greatest(n, 1) + 600
     then p:=p+1; r:=concat(r, E'\n[نجح] ب13 الشيفت مستقل عن النشاط (شيفت=', n, 'ث · نشاط=', secs, 'ث)');
-    else f:=f+1; r:=concat(r, E'\n[فشل] ب13 شيفت=', n, ' نشاط=', secs; end if);
+    else f:=f+1; r:=concat(r, E'\n[فشل] ب13 شيفت=', n, ' نشاط=', secs); end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ب13: '||sqlerrm; end;
 
   raise exception E'\n======== تقرير فصل وقت النشاط عن وقت الشيفت ========%\n\nنجح: %   فشل: %\n', r, p, f;

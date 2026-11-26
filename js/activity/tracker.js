@@ -244,7 +244,9 @@ export class ActivityTracker {
       this.interactions += count;
       this.failures++;
       this.onError(err);
-      if (err.isAuth) { this.stop(); return; }
+      // (0019) خطأ مصادقة: أبلغ الواجهة أولًا حتى تعرض «انتهت الجلسة»
+      // بدل أن يتوقف التتبّع بصمت — ثم أوقف النبض نهائيًا.
+      if (err.isAuth) { this.onStatus({ status: 'auth_failed' }); this.stop(); return; }
       const backoff = Math.min(this.intervalSec * Math.pow(2, this.failures), 300);
       this.onStatus({ status: 'retrying', in_seconds: backoff });
       this._schedule(backoff);

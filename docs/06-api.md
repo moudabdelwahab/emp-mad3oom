@@ -21,8 +21,10 @@ apikey: {publishable_key}
 | `eo_end_break()` | — | الحالة |
 | `eo_ingest_activity(p_payload jsonb)` | نبضة + دفعة أحداث | الحالة والإجماليات والثواني المُحتسبة |
 | `eo_close_device(p_device_id)` | معرّف الجهاز | `true` |
-| `eo_my_timeline(p_date)` | تاريخ (افتراضي: اليوم) | صفوف الخط الزمني |
-| `eo_my_history(p_from, p_to)` | مدى ≤ ٤٠٠ يوم | صف لكل يوم |
+| `eo_my_timeline(p_date)` | تاريخ (افتراضي: اليوم) | صفوف الخط الزمني (فترات الخمول تحمل `meta.reason` و`meta.reason_label`) |
+| `eo_my_history(p_from, p_to)` | مدى ≤ ٤٠٠ يوم | صف لكل يوم — يشمل `present_seconds` و`present_pct` |
+| `eo_request_correction(date, from, to, minutes, reason)` | يوم + فترة داخل شيفت واحد + دقائق ≤ دقائق الفترة + سبب ≥ ١٠ أحرف | الطلب المعلَّق |
+| `eo_my_correction_requests()` | — | طلبات التصحيح الخاصة بالموظف وحالاتها |
 | `eo_my_activity(p_date, p_limit)` | — | عمليات الموظف داخل المنصة |
 | `eo_report(p_from, p_to, …)` | — | تقرير (يُقصر قسرًا على بيانات الطالب) |
 | `eo_lists()` | — | القوائم المرجعية |
@@ -54,7 +56,14 @@ apikey: {publishable_key}
   "credited_seconds": 60,      // ما احتُسب فعلًا في هذا النداء
   "stored_events": 1,
   "on_break": false,
-  "totals": { "shift_seconds": …, "break_seconds": …, "active_seconds": …, "idle_seconds": …, "active_pct": … },
+  // جديد في 0019:
+  "break_auto_ended": false,   // أُنهيت استراحة مفتوحة بحدث عمل حقيقي
+  "backfilled_seconds": 0,     // ما اعتُمد رجعيًا من انخراط الدقائق السابقة
+  "present_credited_seconds": 0,// حضور مُحتسب في هذا النداء (ظاهر + Focus)
+  "last_interaction_at": "…",
+  "idle_seconds": 0,            // ثوانٍ منذ آخر تفاعل حقيقي
+  "totals": { "shift_seconds": …, "break_seconds": …, "active_seconds": …, "idle_seconds": …, "active_pct": …,
+              "present_seconds": …, "present_pct": … },
   "next_heartbeat_seconds": 60 // الخادم يملي إيقاع النبض
 }
 ```
@@ -66,8 +75,10 @@ apikey: {publishable_key}
 
 | الدالة | الوظيفة |
 |---|---|
-| `eo_admin_overview()` | عدّادات اللحظة + إجماليات اليوم |
-| `eo_admin_employees_live()` | صف لكل موظف بحالته وأرقامه |
+| `eo_admin_overview()` | عدّادات اللحظة + إجماليات اليوم (يشمل `present_seconds` و`avg_present_pct`) |
+| `eo_admin_employees_live()` | صف لكل موظف بحالته وأرقامه (يشمل `present_seconds` و`present_pct`) |
+| `eo_admin_correction_requests(status)` | طلبات التصحيح (افتراضيًا المعلَّقة) |
+| `eo_admin_review_correction(id, approve, note)` | اعتماد يكتب الدقائق بمصدر `correction`، أو رفض بسبب إلزامي — المراجع لا يراجع طلب نفسه |
 | `eo_admin_employee_detail(id, date)` | تفاصيل يوم موظف: جلسات، استراحات، أجهزة |
 | `eo_admin_employee_timeline(id, date)` | الخط الزمني |
 | `eo_admin_employee_activity(id, date, limit)` | عملياته داخل المنصة |
@@ -107,5 +118,6 @@ apikey: {publishable_key}
 | `EO091` | محاولة تعديل سجل مغلق خارج المسار الإداري |
 | `EO400` | مدخلات غير صالحة |
 | `EO401` | غير مسجَّل دخول |
-| `EO403` | لا صلاحية / حساب موقوف |
+| `EO403` | لا صلاحية / حساب موقوف / مراجعة ذاتية لطلب تصحيح |
 | `EO404` | غير موجود |
+| `EO011` | طلب تصحيح معلَّق يتداخل مع الفترة المطلوبة |

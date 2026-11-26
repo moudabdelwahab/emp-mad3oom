@@ -10,6 +10,10 @@
 --   بتأريخ الحالة المخزَّنة إلى الوراء مباشرةً — وهو ما يكافئ مرور الوقت
 --   تمامًا من وجهة نظر المحرك، ويجعل النتائج قطعية لا تعتمد على sleep.
 --
+--   ملاحظة (0018): بعد بوّابة الانخراط، النبضة بلا source_app='mad3oom'
+--   لا تُحتسب إطلاقًا — لذلك كل نبضة يُقصد بها تفاعل داخل مدعوم تحمل
+--   source_app صراحةً. النبضات التي يُقصد بها لوحة العمليات تبقى بلا مصدر.
+--
 -- التشغيل: نفّذ الملف كاملًا بدور postgres (أو عبر Supabase SQL Editor).
 -- ═══════════════════════════════════════════════════════════════
 do $$
@@ -37,6 +41,10 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', u1::text, 'email', 'eo-test-1@test.invalid', 'role', 'authenticated')::text, true);
 
+  -- كل نبضات هذا الملف تقع في نافذة زمنية واحدة (now() ثابتة داخل المعاملة)،
+  -- فارفع حدّ النداءات مؤقتًا كما يفعل ملف 04 — وإلا تدخّل التحديد ورفض النبضات.
+  update emp_ops.app_settings set value = '1000' where key = 'max_ingest_calls_per_bucket';
+
   ---------------------------------------------------------------
   -- ت١: الحالة الابتدائية = لم يبدأ العمل
   begin
@@ -51,7 +59,9 @@ begin
   begin
     js := public.eo_start_shift('{"device_id":"dev-A","platform":"test"}'::jsonb);
     sid := (js -> 'session' ->> 'id')::uuid;
-    if sid is not null and js ->> 'presence' = 'active'
+    -- (0018) بدء الشيفت إجراء إداري في لوحة العمليات لا يفتح نافذة نشاط،
+    -- فالحالة بعد البدء "خامل" حتى أول تفاعل داخل مدعوم — لا "نشط".
+    if sid is not null and js ->> 'presence' = 'idle'
        and (select count(*) from emp_ops.attendance_sessions where employee_id=e1 and status='open')=1
     then p:=p+1; r:=r||E'\n[نجح] ت٢ بدء الشيفت أنشأ جلسة مفتوحة واحدة';
     else f:=f+1; r:=r||E'\n[فشل] ت٢ بدء الشيفت'; end if;
@@ -89,19 +99,36 @@ begin
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ت٥: '||sqlerrm; end;
 
   ---------------------------------------------------------------
-  -- ت٦: محاكاة مرور ٣٠ دقيقة — الاحتساب يتوقف عند عتبة الخمول (٥ دقائق)
+  -- ت٦: محاكاة مرور ٦ دقائق بلا تفاعل — الاحتساب يتوقف عند عتبة الخمول (٥ دقائق)
+  -- (0018) قاعدة التغطية تمنع قفزة واحدة ٣٠ دقيقة بلا نبضات، لذلك تُحاكى
+  -- المدة على خطوات دقيقتين (كل خطوة داخل حدّ التغطية ١٨٠ث): ١٢٠ + ١٢٠ + ٦٠ = ٣٠٠.
   begin
     update emp_ops.attendance_sessions set started_at = now() - interval '30 minutes' where id = sid;
+    secs := 0;
+    -- الخطوة ١: آخر تفاعل قبل دقيقتين
     update emp_ops.employee_runtime_state
-       set last_interaction_at = now() - interval '30 minutes',
-           marked_until        = now() - interval '30 minutes',
-           last_heartbeat_at   = now() - interval '30 minutes'
+       set last_interaction_at = now() - interval '2 minutes',
+           marked_until        = now() - interval '2 minutes',
+           last_heartbeat_at   = now() - interval '2 minutes'
      where employee_id = e1;
-
-    js := public.eo_ingest_activity('{"device_id":"dev-A","interactions":0}'::jsonb);
-    secs := (js ->> 'credited_seconds')::int;
+    js := public.eo_ingest_activity('{"device_id":"dev-A","interactions":0,"source_app":"mad3oom","visible":true}'::jsonb);
+    secs := secs + (js ->> 'credited_seconds')::int;
+    -- الخطوة ٢: آخر تفاعل قبل ٤ دقائق
+    update emp_ops.employee_runtime_state
+       set last_interaction_at = now() - interval '4 minutes',
+           marked_until        = now() - interval '2 minutes'
+     where employee_id = e1;
+    js := public.eo_ingest_activity('{"device_id":"dev-A","interactions":0,"source_app":"mad3oom","visible":true}'::jsonb);
+    secs := secs + (js ->> 'credited_seconds')::int;
+    -- الخطوة ٣: آخر تفاعل قبل ٦ دقائق — نافذة الخمول تنتهي بعد دقيقة واحدة
+    update emp_ops.employee_runtime_state
+       set last_interaction_at = now() - interval '6 minutes',
+           marked_until        = now() - interval '2 minutes'
+     where employee_id = e1;
+    js := public.eo_ingest_activity('{"device_id":"dev-A","interactions":0,"source_app":"mad3oom","visible":true}'::jsonb);
+    secs := secs + (js ->> 'credited_seconds')::int;
     if secs between idle_s - 60 and idle_s
-    then p:=p+1; r:=r||E'\n[نجح] ت٦ احتُسبت عتبة الخمول فقط ('||secs||' ثانية من ١٨٠٠)';
+    then p:=p+1; r:=r||E'\n[نجح] ت٦ احتُسبت عتبة الخمول فقط ('||secs||' ثانية من ٣٦٠)';
     else f:=f+1; r:=r||E'\n[فشل] ت٦ احتُسب '||secs||' ثانية بدل ~'||idle_s; end if;
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ت٦: '||sqlerrm; end;
 
@@ -118,7 +145,7 @@ begin
   -- ت٨: العودة بتفاعل جديد لا تمنح الفجوة الخاملة بأثر رجعي
   begin
     select coalesce(sum(seconds),0) into n from emp_ops.activity_minutes where employee_id=e1;
-    js := public.eo_ingest_activity('{"device_id":"dev-A","interactions":7}'::jsonb);
+    js := public.eo_ingest_activity('{"device_id":"dev-A","interactions":7,"source_app":"mad3oom","visible":true}'::jsonb);
     secs := (js ->> 'credited_seconds')::int;
     if secs = 0
     then p:=p+1; r:=r||E'\n[نجح] ت٨ التفاعل بعد ٢٥ دقيقة خمول لم يمنح أي وقت رجعي';
@@ -134,9 +161,9 @@ begin
        set last_interaction_at = now() - interval '2 minutes',
            marked_until        = now() - interval '2 minutes'
      where employee_id = e1;
-    js := public.eo_ingest_activity('{"device_id":"dev-A","interactions":1}'::jsonb);
+    js := public.eo_ingest_activity('{"device_id":"dev-A","interactions":1,"source_app":"mad3oom","visible":true}'::jsonb);
     secs := (js ->> 'credited_seconds')::int;
-    js := public.eo_ingest_activity('{"device_id":"dev-B","interactions":1}'::jsonb);
+    js := public.eo_ingest_activity('{"device_id":"dev-B","interactions":1,"source_app":"mad3oom","visible":true}'::jsonb);
     if secs between 110 and 130 and (js ->> 'credited_seconds')::int = 0
     then p:=p+1; r:=r||E'\n[نجح] ت٩ الجهاز الأول احتُسب ('||secs||'ث) والثاني لم يضاعف (٠ث)';
     else f:=f+1; r:=r||E'\n[فشل] ت٩ الأول='||secs||' الثاني='||(js->>'credited_seconds'); end if;
@@ -163,7 +190,7 @@ begin
     if js ->> 'status' = 'throttled'
     then p:=p+1; r:=r||E'\n[نجح] ت١١ رُفض النداء الزائد (throttled)';
     else f:=f+1; r:=r||E'\n[فشل] ت١١ الحالة='||coalesce(js->>'status','?'); end if;
-    update emp_ops.app_settings set value='6' where key='max_ingest_calls_per_bucket';
+    update emp_ops.app_settings set value='1000' where key='max_ingest_calls_per_bucket';
   exception when others then f:=f+1; r:=r||E'\n[خطأ] ت١١: '||sqlerrm; end;
 
   ---------------------------------------------------------------
@@ -193,7 +220,7 @@ begin
            marked_until        = now() - interval '2 minutes'
      where employee_id = e1;
     update emp_ops.break_sessions set started_at = now() - interval '3 minutes' where id = bid;
-    js := public.eo_ingest_activity('{"device_id":"dev-A","interactions":5}'::jsonb);
+    js := public.eo_ingest_activity('{"device_id":"dev-A","interactions":5,"source_app":"mad3oom","visible":true}'::jsonb);
     if (js ->> 'on_break')::boolean and (js ->> 'credited_seconds')::int = 0
     then p:=p+1; r:=r||E'\n[نجح] ت١٤ الاستراحة لا تُحتسب نشاطًا';
     else f:=f+1; r:=r||E'\n[فشل] ت١٤ credited='||coalesce(js->>'credited_seconds','?'); end if;

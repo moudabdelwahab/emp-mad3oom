@@ -36,13 +36,16 @@ supabase db push
 | `0014` | تصحيح ترتيب احتساب النشاط |
 | `0015` | تصحيح عدّ الأجهزة |
 | `0016` | القوائم المرجعية |
+| `0017` | تثبيت search_path على الدوال المتبقية (تنبيه مدقّق Supabase الأمني) |
+| `0018` | ربط احتساب وقت النشاط بالانخراط الفعلي في تبويب مدعوم (ظاهر + Focus) |
+| `0019` | الدقة والعدالة: حضور من مستويين، رجوع حدث الشغل، إنهاء الاستراحة المنسية، سبب الخمول، تصحيح السجل، تنبيه الشيفت المنسي |
 
 بعد التنفيذ تحقق:
 
 ```sql
-select count(*) from information_schema.tables where table_schema = 'emp_ops';         -- 18
+select count(*) from information_schema.tables where table_schema = 'emp_ops';         -- 19
 select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
- where n.nspname='public' and p.proname like 'eo\_%';                                  -- 34
+ where n.nspname='public' and p.proname like 'eo\_%';                                  -- 38
 select count(*) from pg_tables where schemaname='emp_ops' and not rowsecurity;         -- 0
 select count(*) from cron.job where jobname like 'emp_ops%';                           -- 2
 ```

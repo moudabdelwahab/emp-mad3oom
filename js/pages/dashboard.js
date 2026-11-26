@@ -46,12 +46,17 @@ if (auth) {
         setConnection(true, `آخر مزامنة ${time(res.server_time)}`);
         paintTotals(res.totals, res.presence);
         paintActivityHint(res);
+        // (0019) حدث عمل أثناء استراحة ينهيها تلقائيًا — نبّه الموظف حتى
+        // لا يظن أن استراحته ما زالت سارية.
+        if (res.break_auto_ended) toast('انتهت استراحتك تلقائيًا لأنك بدأت العمل.', 'info');
       } else if (res.status === 'offline_client') {
         setConnection(false, 'لا يوجد اتصال — سيُستأنف تلقائيًا');
       } else if (res.status === 'retrying') {
         setConnection(false, `تعذّرت المزامنة، إعادة المحاولة خلال ${Math.round(res.in_seconds)} ثانية`);
       } else if (res.status === 'no_session') {
         setConnection(true, 'لا يوجد شيفت مفتوح');
+      } else if (res.status === 'auth_failed') {
+        setConnection(false, 'انتهت الجلسة — سجّل الدخول مجددًا');
       }
     },
     onError: (err) => { if (err.isAuth) toast(messageOf(err), 'error'); }
@@ -83,15 +88,22 @@ if (auth) {
     tab_hidden:        'تبويب مدعوم مخفي الآن، فتوقّف احتساب وقت النشاط. الشيفت مستمر كما هو.',
     tab_unfocused:     'تبويب مدعوم ليس التبويب النشط الآن، فتوقّف احتساب وقت النشاط. الشيفت مستمر كما هو.',
     on_break:          'أنت في استراحة — لا يُحتسب وقت نشاط، والاستراحة مطروحة من مقام النسبة.',
-    no_interaction:    'لا يوجد تفاعل داخل مدعوم منذ فترة، فتوقّف احتساب وقت النشاط. أي تفاعل حقيقي يستأنفه.'
+    no_interaction:    'لا يوجد تفاعل داخل مدعوم منذ فترة، فتوقّف احتساب وقت النشاط — لكن وقت الحضور يستمر ما دام التبويب ظاهرًا ومركّزًا. أي تفاعل حقيقي يستأنف النشاط.'
   };
 
   function paintActivityHint(res) {
     const text = res.activity_counted ? null : HINTS[res.activity_reason];
-    if (!text) { mount(hintBox); return; }
+    // (0019) خمول طويل: تنبيه أقوى — الموظف قد يكون يقرأ أو في مكالمة،
+    // فيستحق أن يعرف أن نشاطه متوقف بينما حضوره مستمر.
+    const idleLong = res.presence === 'idle' && (res.idle_seconds || 0) > 600;
+    const longText = idleLong
+      ? 'أنت خامل منذ أكثر من ١٠ دقائق — وقت النشاط متوقف، لكن وقت الحضور يستمر ما دام تبويب مدعوم ظاهرًا ومركّزًا.'
+      : null;
+    const full = [longText, text].filter(Boolean).join(' ');
+    if (!full) { mount(hintBox); return; }
     mount(hintBox, el('div', { class: 'alert alert-info mb-4' }, [
       el('span', { html: icon('info') }),
-      el('div', { class: 'small', text })
+      el('div', { class: 'small', text: full })
     ]));
   }
 
@@ -99,12 +111,17 @@ if (auth) {
     if (!t) return;
     const denom = Math.max((t.shift_seconds || 0) - (t.break_seconds || 0), 0);
     const p = denom > 0 ? ((t.active_seconds || 0) / denom) * 100 : null;
+    // (0019) الحضور: ظاهر ومركّز داخل مدعوم، بتفاعل أو بلا تفاعل — يشمل
+    // وقت النشاط إضافةً إلى القراءة والمكالمات.
+    const pp = denom > 0 ? ((t.present_seconds || 0) / denom) * 100 : null;
     mount(statsBox,
       stat('مدة العمل اليوم', duration(t.shift_seconds), { iconName: 'clock' }),
       stat('وقت النشاط', duration(t.active_seconds), { iconName: 'activity', accent: true, meterPct: p }),
+      stat('وقت الحضور', duration(t.present_seconds), { iconName: 'eye', sub: 'ظاهر ومركّز داخل مدعوم', meterPct: pp }),
       stat('وقت الخمول', duration(t.idle_seconds), { iconName: 'pause' }),
       stat('الاستراحات', duration(t.break_seconds), { iconName: 'coffee' }),
-      stat('نسبة النشاط', p === null ? '—' : pct(p), { sub: 'من وقت العمل بعد خصم الاستراحات', iconName: 'chart' })
+      stat('نسبة النشاط', p === null ? '—' : pct(p), { sub: 'من وقت العمل بعد خصم الاستراحات', iconName: 'chart' }),
+      stat('نسبة الحضور', pp === null ? '—' : pct(pp), { sub: 'من وقت العمل بعد خصم الاستراحات', iconName: 'chart' })
     );
   }
 

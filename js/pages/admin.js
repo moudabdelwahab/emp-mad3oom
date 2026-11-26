@@ -22,6 +22,7 @@ if (auth) {
   const todayBox  = el('div', { class: 'stat-grid' });
   const tableBox  = el('div');
   const alertsBox = el('div');
+  const corrBox   = el('div');
   const updatedAt = el('span', { class: 'xsmall dim' });
 
   mount(content,
@@ -29,6 +30,7 @@ if (auth) {
     alertsBox,
     el('div', {}, [el('h2', { text: 'اليوم' }), el('div', { class: 'xsmall dim mb-4', text: 'إجماليات اليوم حتى الآن' }), todayBox]),
     card('الموظفون', tableBox, [updatedAt]),
+    card('طلبات التصحيح المعلَّقة', corrBox),
     formulaNote()
   );
 
@@ -39,10 +41,13 @@ if (auth) {
     busyLoading = true;
     if (manual) refreshBtn.classList.add('is-loading');
     try {
-      const [ov, rows, multi] = await Promise.all([api.overview(), api.employeesLive(), api.multiDevice()]);
+      const [ov, rows, multi, corrs] = await Promise.all([
+        api.overview(), api.employeesLive(), api.multiDevice(), api.adminCorrections('pending')
+      ]);
       paintOverview(ov);
       paintTable(rows);
       paintAlerts(multi);
+      paintCorrections(corrs);
       updatedAt.textContent = `آخر تحديث ${time(ov.server_time)}`;
       setConnection(true);
     } catch (err) {
@@ -69,12 +74,69 @@ if (auth) {
       stat('إجمالي ساعات العمل', hours(t.shift_seconds), { sub: 'ساعة', iconName: 'clock' }),
       stat('إجمالي وقت النشاط', hours(t.active_seconds), { sub: 'ساعة', iconName: 'activity',
            meterPct: t.avg_active_pct, accent: true }),
+      // (0019) الحضور: ظاهر ومركّز داخل مدعوم، بتفاعل أو بلا تفاعل.
+      stat('إجمالي وقت الحضور', hours(t.present_seconds), { sub: 'ساعة', iconName: 'eye',
+           meterPct: t.avg_present_pct }),
       stat('إجمالي الخمول', hours(t.idle_seconds), { sub: 'ساعة', iconName: 'pause' }),
       stat('متوسط النشاط', t.avg_active_pct === null ? '—' : pct(t.avg_active_pct), { iconName: 'chart' }),
+      stat('متوسط الحضور', t.avg_present_pct === null ? '—' : pct(t.avg_present_pct), { iconName: 'chart' }),
       stat('عدد الشيفتات', number(t.sessions_count), { iconName: 'calendar' }),
       stat('حالات التأخير', number(t.late_count), { iconName: 'warning' }),
       stat('الغياب', number(t.absent_count), { sub: 'أيام عمل مجدولة بلا حضور', iconName: 'warning' })
     );
+  }
+
+  /** (0019) مراجعة طلبات التصحيح: اعتماد يكتب الدقائق في السجل، ورفض يتطلب سببًا. */
+  function paintCorrections(rows) {
+    mount(corrBox, table(
+      ['الموظف', 'اليوم', 'الفترة', 'الدقائق', 'السبب', ''],
+      rows,
+      (r) => [
+        el('div', {}, [
+          el('div', { class: 'strong', text: r.employee_name }),
+          el('div', { class: 'xsmall dim', text: r.employee_code || '' })
+        ]),
+        r.work_date,
+        `${time(r.period_start)} – ${time(r.period_end)}`,
+        number(r.requested_minutes),
+        r.reason,
+        el('div', { class: 'row' }, [
+          el('button', {
+            class: 'btn btn-sm btn-primary', text: 'اعتماد',
+            onclick: async () => {
+              const ok = await confirmDialog({
+                title: `اعتماد تصحيح ${r.employee_name}`,
+                message: `ستُكتب ${r.requested_minutes} دقيقة نشاط في سجل ${r.employee_name} ليوم ${r.work_date} بمصدر «تصحيح»، وتُسجَّل العملية في سجل التدقيق باسمك.`,
+                confirmText: 'اعتماد'
+              });
+              if (!ok) return;
+              try {
+                const res = await api.reviewCorrection(r.id, true, null);
+                toast(res.message, 'success');
+                load(true);
+              } catch (err) { toast(messageOf(err), 'error'); }
+            }
+          }),
+          el('button', {
+            class: 'btn btn-sm btn-ghost', text: 'رفض',
+            onclick: async () => {
+              const reason = await confirmDialog({
+                title: `رفض تصحيح ${r.employee_name}`,
+                message: 'سيُرفض الطلب ويُسجَّل سبب الرفض ليطّلع عليه الموظف.',
+                confirmText: 'رفض', danger: true, requireReason: true
+              });
+              if (!reason) return;
+              try {
+                const res = await api.reviewCorrection(r.id, false, reason);
+                toast(res.message, 'success');
+                load(true);
+              } catch (err) { toast(messageOf(err), 'error'); }
+            }
+          })
+        ])
+      ],
+      { empty: 'لا توجد طلبات تصحيح معلَّقة.' }
+    ));
   }
 
   function paintAlerts(multi) {
@@ -142,6 +204,7 @@ if (auth) {
       .on('postgres_changes', { event: '*', schema: 'emp_ops', table: 'employee_runtime_state' }, bump)
       .on('postgres_changes', { event: '*', schema: 'emp_ops', table: 'attendance_sessions' }, bump)
       .on('postgres_changes', { event: '*', schema: 'emp_ops', table: 'break_sessions' }, bump)
+      .on('postgres_changes', { event: '*', schema: 'emp_ops', table: 'activity_correction_requests' }, bump)
       .subscribe();
   } catch { /* البث اختياري — التحديث الدوري يغطّي الحالة */ }
 

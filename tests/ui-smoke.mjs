@@ -32,7 +32,8 @@ const ME = {
   shift: { id: 'sh1', name_ar: 'الشيفت الصباحي', start_time: '09:00:00', end_time: '17:00:00', grace_minutes: 10, work_days: [0,1,2,3,4] },
   presence: 'active', presence_label: 'نشط',
   last_interaction_at: iso(1), last_heartbeat_at: iso(0),
-  totals: { shift_seconds: 12000, break_seconds: 1800, active_seconds: 7200, idle_seconds: 3000, active_pct: 70.6, sessions_count: 1 },
+  totals: { shift_seconds: 12000, break_seconds: 1800, active_seconds: 7200, idle_seconds: 3000, active_pct: 70.6,
+            present_seconds: 9000, present_pct: 88.2, sessions_count: 1 },
   settings: { idle_threshold_seconds: 300, heartbeat_interval_seconds: 60, offline_threshold_seconds: 180, timezone: 'Africa/Cairo' }
 };
 
@@ -42,11 +43,14 @@ const RESPONSES = {
   eo_ingest_activity: { status: 'ok', server_time: now.toISOString(), presence: 'idle', presence_label: 'خامل',
                         credited_seconds: 0, stored_events: 0, on_break: false, totals: ME.totals,
                         qualifies: false, engaged: false, activity_counted: false,
-                        activity_reason: 'not_qualified_app', next_heartbeat_seconds: 60 },
+                        activity_reason: 'not_qualified_app', next_heartbeat_seconds: 60,
+                        break_auto_ended: false, backfilled_seconds: 0, present_credited_seconds: 0,
+                        idle_seconds: 0, last_interaction_at: iso(1) },
   eo_my_timeline: [
     { at: iso(200), until: null, kind: 'shift_start', label: 'بدأ العمل', seconds: null, meta: {} },
     { at: iso(198), until: iso(150), kind: 'active_period', label: 'فترة نشاط', seconds: 2880, meta: {} },
-    { at: iso(150), until: iso(120), kind: 'idle_period', label: 'فترة خمول', seconds: 1800, meta: {} },
+    { at: iso(150), until: iso(120), kind: 'idle_period', label: 'فترة خمول', seconds: 1800,
+      meta: { reason: 'present_quiet', reason_label: 'حاضر داخل مدعوم بلا تفاعل — قراءة أو مكالمة غالبًا' } },
     { at: iso(120), until: iso(90), kind: 'break_period', label: 'فترة استراحة', seconds: 1800, meta: {} }
   ],
   eo_my_activity: [
@@ -54,22 +58,28 @@ const RESPONSES = {
   ],
   eo_my_history: [
     { work_date: today, first_start_at: iso(200), last_end_at: null, shift_seconds: 12000, break_seconds: 1800,
-      active_seconds: 7200, idle_seconds: 3000, active_pct: 70.6, late_seconds: 420, is_late: true, is_absent: false, sessions_count: 1 }
+      active_seconds: 7200, idle_seconds: 3000, active_pct: 70.6, present_seconds: 9000, present_pct: 88.2,
+      late_seconds: 420, is_late: true, is_absent: false, sessions_count: 1 }
   ],
+  eo_my_correction_requests: [],
+  eo_admin_correction_requests: [],
   eo_admin_overview: {
     server_time: now.toISOString(), work_date: today, timezone: 'Africa/Cairo',
     live: { total_employees: 12, working: 7, active: 4, idle: 2, on_break: 1, disconnected: 0, ended: 2, not_started: 3 },
     today: { shift_seconds: 90000, sessions_count: 9, break_seconds: 9000, active_seconds: 54000,
-             idle_seconds: 27000, avg_active_pct: 66.7, late_count: 2, absent_count: 1, employees_worked: 9 }
+             idle_seconds: 27000, avg_active_pct: 66.7, present_seconds: 72000, avg_present_pct: 88.9,
+             late_count: 2, absent_count: 1, employees_worked: 9 }
   },
   eo_admin_employees_live: [
     { employee_id: 'e1', full_name: 'أحمد محمود', employee_code: 'EMP-0002', email: 'a@mad3oom.com', role: 'employee',
       team: 'فريق الدعم', presence: 'active', presence_label: 'نشط', session_id: 's1', started_at: iso(200),
       shift_seconds: 12000, active_seconds: 7200, idle_seconds: 3000, break_seconds: 1800, active_pct: 70.6,
+      present_seconds: 9000, present_pct: 88.2,
       late_seconds: 420, last_interaction_at: iso(1), last_heartbeat_at: iso(0), active_devices: 2, status: 'active' },
     { employee_id: 'e2', full_name: 'سارة علي', employee_code: null, email: 's@mad3oom.com', role: 'employee',
       team: null, presence: 'not_started', presence_label: 'لم يبدأ العمل', session_id: null, started_at: null,
       shift_seconds: 0, active_seconds: 0, idle_seconds: 0, break_seconds: 0, active_pct: null,
+      present_seconds: 0, present_pct: null,
       late_seconds: 0, last_interaction_at: null, last_heartbeat_at: null, active_devices: 0, status: 'active' }
   ],
   eo_admin_multi_device: [{ employee_id: 'e1', full_name: 'أحمد محمود', devices: 2, session_id: 's1' }],

@@ -62,6 +62,13 @@ export const api = {
   adjustAttendance: (sessionId, startedAt, endedAt, reason) =>
                        rpc('eo_admin_adjust_attendance', { p_session_id: sessionId, p_started_at: startedAt, p_ended_at: endedAt, p_reason: reason }),
 
+  /* ── تصحيح سجل الحضور (الطعن) — طلب الموظف ومراجعة الإدارة ── */
+  requestCorrection: (date, from, to, minutes, reason) =>
+                       rpc('eo_request_correction', { p_work_date: date, p_from: from, p_to: to, p_requested_minutes: minutes, p_reason: reason }),
+  myCorrections:     ()                    => rpc('eo_my_correction_requests'),
+  adminCorrections:  (status)             => rpc('eo_admin_correction_requests', { p_status: status || 'pending' }),
+  reviewCorrection:  (id, approve, note)  => rpc('eo_admin_review_correction', { p_request_id: id, p_approve: approve, p_note: note || null }),
+
   /* ── الفرق والشيفتات ── */
   upsertTeam:       (payload)             => rpc('eo_admin_upsert_team', { p_payload: payload }),
   upsertShift:      (payload)             => rpc('eo_admin_upsert_shift', { p_payload: payload }),

@@ -55,13 +55,17 @@ export function timeline(items) {
     k === 'idle_period'   ? 'k-idle'   :
     k === 'break_period'  ? 'k-break'  : 'k-event';
 
-  return el('div', { class: 'timeline' }, shown.map((i) =>
-    el('div', { class: `tl-item ${kindClass(i.kind)}` }, [
+  return el('div', { class: 'timeline' }, shown.map((i) => {
+    // فترات الخمول تحمل سببها في meta (0019): «تبويب مخفي»، «حاضر بلا
+    // تفاعل»… — تُعرض كسطر فرعي حتى يفهم الموظف والمدير سبب الفجوة.
+    const reason = i.kind === 'idle_period' && i.meta ? i.meta.reason_label : null;
+    return el('div', { class: `tl-item ${kindClass(i.kind)}` }, [
       el('span', { class: 'tl-time', text: time(i.at) }),
       el('span', { class: 'tl-label', text: i.label }),
+      reason ? el('span', { class: 'xsmall dim', text: reason }) : null,
       i.seconds ? el('span', { class: 'tl-dur', text: `(${duration(i.seconds)})` }) : null
-    ])
-  ));
+    ]);
+  }));
 }
 
 /** رسم أعمدة يومي: نشاط / خمول / استراحة. */

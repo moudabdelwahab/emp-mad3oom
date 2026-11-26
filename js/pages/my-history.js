@@ -2,7 +2,7 @@
 import { requireAuth, state } from '../auth/guard.js';
 import { renderShell, pageTitle } from '../components/shell.js';
 import { api } from '../services/api.js';
-import { el, mount, toast, busy } from '../utils/dom.js';
+import { el, mount, toast, busy, formDialog } from '../utils/dom.js';
 import { stat, card, table, barChart, timeline, formulaNote } from '../components/widgets.js';
 import { duration, pct, time, hours, number, date as fmtDate } from '../utils/format.js';
 import { serverNow, dateKey, addDays, startOfMonth } from '../utils/time.js';
@@ -26,6 +26,7 @@ if (auth) {
   const chartBox = el('div');
   const tableBox = el('div');
   const dayBox   = el('div');
+  const corrBox  = el('div');
 
   mount(content,
     el('div', { class: 'filters' }, [
@@ -37,11 +38,13 @@ if (auth) {
     card('التوزيع اليومي', chartBox),
     card('الأيام', tableBox),
     card('تفاصيل اليوم المحدَّد', dayBox),
+    card('طلبات التصحيح', corrBox),
     formulaNote()
   );
 
   runBtn.addEventListener('click', load);
   await load();
+  await loadCorrections();
 
   async function load() {
     if (to < from) { toast('تاريخ النهاية يسبق تاريخ البداية.', 'error'); return; }
@@ -88,10 +91,58 @@ if (auth) {
     try {
       const tl = await api.myTimeline(workDate);
       mount(dayBox, el('div', {}, [
-        el('div', { class: 'strong mb-4', text: fmtDate(workDate) }),
+        el('div', { class: 'row mb-4' }, [
+          el('div', { class: 'strong', text: fmtDate(workDate) }),
+          el('button', { class: 'btn btn-outline', text: 'طلب تصحيح لهذا اليوم', onclick: () => requestCorrection(workDate) })
+        ]),
         timeline(tl)
       ]));
       dayBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (err) { toast(messageOf(err), 'error'); }
+  }
+
+  /** (0019) طلب تصحيح: دقائق نشاط فات احتسابها تُراجَعها الإدارة وتُعتمَد. */
+  async function requestCorrection(workDate) {
+    const out = await formDialog({
+      title: `طلب تصحيح — ${fmtDate(workDate)}`,
+      submitText: 'إرسال الطلب',
+      fields: [
+        { name: 'from', label: 'من', type: 'datetime-local', value: `${workDate}T09:00`, required: true },
+        { name: 'to', label: 'إلى', type: 'datetime-local', value: `${workDate}T10:00`, required: true },
+        { name: 'minutes', label: 'عدد الدقائق المطلوبة', type: 'number', value: '30', min: 1, max: 480, required: true,
+          hint: 'دقائق نشاط تُضاف إلى سجلك في هذه الفترة بعد اعتماد الإدارة — لا تتجاوز دقائق الفترة.' },
+        { name: 'reason', label: 'السبب', type: 'textarea', required: true,
+          hint: 'اذكر بوضوح ما الذي فات احتسابه ولماذا (١٠ أحرف على الأقل). يراه المدير عند المراجعة.' }
+      ]
+    });
+    if (!out) return;
+    try {
+      const res = await api.requestCorrection(workDate,
+        new Date(out.from).toISOString(), new Date(out.to).toISOString(),
+        parseInt(out.minutes, 10), out.reason);
+      toast(res.message, 'success');
+      await loadCorrections();
+    } catch (err) { toast(messageOf(err), 'error'); }
+  }
+
+  async function loadCorrections() {
+    try {
+      const rows = await api.myCorrections();
+      mount(corrBox, table(
+        ['اليوم', 'الفترة', 'الدقائق', 'السبب', 'الحالة', 'المراجعة'],
+        rows,
+        (r) => [
+          fmtDate(r.work_date),
+          `${time(r.period_start)} – ${time(r.period_end)}`,
+          number(r.requested_minutes) + (r.approved_seconds ? ` (${duration(r.approved_seconds)} معتمَدة)` : ''),
+          r.reason,
+          r.status === 'pending' ? el('span', { class: 'badge badge-warning plain', text: 'معلَّق' })
+            : r.status === 'approved' ? el('span', { class: 'badge badge-success plain', text: 'معتمَد' })
+            : el('span', { class: 'badge badge-danger plain', text: 'مرفوض' }),
+          r.reviewed_at ? `${r.review_note || ''} — ${r.reviewer_name || ''}` : '—'
+        ],
+        { empty: 'لا توجد طلبات تصحيح بعد. إن فات احتساب وقت عمل حقيقي، اطلبه من تفاصيل اليوم.' }
+      ));
     } catch (err) { toast(messageOf(err), 'error'); }
   }
 }
